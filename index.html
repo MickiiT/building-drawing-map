@@ -36,7 +36,7 @@
     }).addTo(map);
 
     // Add DRA-styled LiDAR tile overlay
-    L.tileLayer('https://tiles-cdn.koordinates.com/services;key=d3971a9d0ad84133820767ba0525623c/tiles/v4/layer=121879/EPSG:3857/{z}/{x}/{y}.png', {
+    L.tileLayer('https://tiles-cdn.koordinates.com/services;key=d3971a9d0ad84133820767ba0525623c/tiles/v4/layer=121859/EPSG:3857/{z}/{x}/{y}.png', {
       attribution: 'DRA LiDAR &copy; LINZ',
       tileSize: 256,
       maxZoom: 18,
@@ -54,7 +54,7 @@
       var x = point[0];
       var y = point[1];
 
-      var apiUrl = `https://data.linz.govt.nz/services/query/v1/raster.json?key=d3971a9d0ad84133820767ba0525623c&layer=121859&x=${x}&y=${y}`;
+      var apiUrl = `https://data.linz.govt.nz/services/query/v1/raster.json?key=d3971a9d0ad84133820767ba0525623c&layer=121859&x=[x]&y=[y]`;
       console.log("Querying:", apiUrl);
 
       fetch(apiUrl)
