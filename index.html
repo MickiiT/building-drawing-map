@@ -36,8 +36,14 @@
     }
 
     function getCogUrlForNZTM(nztmCoords) {
-      // Static test file URL in Canterbury - replace with dynamic logic
-      return 'https://nz-elevation.s3.amazonaws.com/CANTERBURY/DSM/2020-2021/1m/Tile_1525000_5184000.tif';
+      const [x, y] = nztmCoords;
+
+      // Snap to nearest 1000m tile origin (these are 1km x 1km tiles)
+      const xTile = Math.floor(x / 1000) * 1000;
+      const yTile = Math.floor(y / 1000) * 1000;
+
+      // Construct the AWS URL for the Canterbury DEM tile
+      return `https://nz-elevation.s3.amazonaws.com/CANTERBURY/DSM/2020-2021/1m/Tile_${xTile}_${yTile}.tif`;
     }
 
     var ElevationLayer = L.GridLayer.extend({
@@ -47,13 +53,10 @@
         tile.height = 256;
 
         var bounds = this._tileCoordsToBounds(coords);
-        var nw = bounds.getNorthWest();
-        var se = bounds.getSouthEast();
+        var center = bounds.getCenter();
 
-        var nztmNW = convertLatLngToNZTM(nw.lat, nw.lng);
-        var nztmSE = convertLatLngToNZTM(se.lat, se.lng);
-
-        var cogUrl = getCogUrlForNZTM(nztmNW);
+        var nztmCenter = convertLatLngToNZTM(center.lat, center.lng);
+        var cogUrl = getCogUrlForNZTM(nztmCenter);
 
         fetch(cogUrl)
           .then(res => res.arrayBuffer())
@@ -67,8 +70,8 @@
             var plot = new plotty.plot({
               canvas: tile,
               data: raster,
-              width: 256,
-              height: 256,
+              width: image.getWidth(),
+              height: image.getHeight(),
               domain: [min, max],
               colorScale: "viridis",
               noDataValue: -9999
