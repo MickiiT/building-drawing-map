@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LiDAR Data with Classification</title>
-  <!-- Include Leaflet CSS -->
+  <title>LiDAR Data with Elevation Query</title>
+
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
   <style>
-    /* Full-screen map */
     #map {
       height: 100vh;
     }
@@ -16,38 +16,63 @@
 <body>
   <div id="map"></div>
 
-  <!-- Include Leaflet JS -->
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 
+  <!-- Proj4 for coordinate conversion -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4.js"></script>
   <script>
-    // Create the map centered on New Zealand (NZ)
-    var map = L.map('map').setView([-40.9006, 174.8860], 6); // Coordinates for New Zealand
+    // Define Web Mercator projection
+    proj4.defs("EPSG:3857", "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs");
+  </script>
 
-    // Add a base map (OpenStreetMap)
-    L.tileLayer('https://basemaps.linz.govt.nz/v1/tiles/aerial/WebMercatorQuad/{z}/{x}/{y}.webp?api=c01jrxpkjkxwdtsqct5y6dnwkca').addTo(map);
+  <script>
+    // Initialize the map centered over New Zealand
+    var map = L.map('map').setView([-40.9006, 174.8860], 6);
 
-    // Add LiDAR tile layer from the provided JSON API URL
-    var lidarTileLayer = L.tileLayer('https://data.linz.govt.nz/services/query/v1/raster.json?key=d3971a9d0ad84133820767ba0525623c&layer=121859&x=[x]&y=[y]', {
+    // Add LINZ aerial basemap
+    L.tileLayer('https://basemaps.linz.govt.nz/v1/tiles/aerial/WebMercatorQuad/{z}/{x}/{y}.webp?api=c01jrxpkjkxwdtsqct5y6dnwkca', {
+      attribution: '&copy; LINZ Aerial Imagery'
+    }).addTo(map);
+
+    // Add LiDAR DRA tile overlay
+    L.tileLayer('https://tiles-cdn.koordinates.com/services;key=d3971a9d0ad84133820767ba0525623c/tiles/v4/layer=121859/EPSG:3857/{z}/{x}/{y}.png', {
       attribution: 'LiDAR Data &copy; LINZ',
       tileSize: 256,
       maxZoom: 18,
       minZoom: 6,
-      bounds: [[-47.0, 166.0], [-34.0, 179.0]], // New Zealand bounds
+      opacity: 0.6
     }).addTo(map);
 
-    // Optional: Add click functionality to view classification values (if classification data exists)
-    // Assuming your LiDAR JSON API provides classification info in the response.
+    // Click event to fetch and display elevation data
     map.on('click', function(e) {
       var lat = e.latlng.lat;
       var lng = e.latlng.lng;
 
-      // Simulate a query or popup display - this can be customized to fetch actual classification data
-      var message = 'Clicked at Lat: ' + lat.toFixed(4) + ', Lng: ' + lng.toFixed(4);
-      // Example of showing a message with classification if possible
-      var popup = L.popup()
-        .setLatLng(e.latlng)
-        .setContent(message) // You can replace this with the actual classification query
-        .openOn(map);
+      // Convert from lat/lng (EPSG:4326) to Web Mercator (EPSG:3857)
+      var point = proj4('EPSG:4326', 'EPSG:3857', [lng, lat]);
+      var x = point[0];
+      var y = point[1];
+
+      // LINZ raster JSON API request for elevation
+      var apiUrl = `https://data.linz.govt.nz/services/query/v1/raster.json?key=d3971a9d0ad84133820767ba0525623c&layer=121859&x=${x}&y=${y}`;
+
+      fetch(apiUrl)
+        .then(response => response.json())
+        .then(data => {
+          var elevation = data.value !== undefined ? data.value.toFixed(2) + ' m' : 'No data';
+          L.popup()
+            .setLatLng(e.latlng)
+            .setContent(`Elevation: ${elevation}`)
+            .openOn(map);
+        })
+        .catch(err => {
+          console.error(err);
+          L.popup()
+            .setLatLng(e.latlng)
+            .setContent('Error retrieving data')
+            .openOn(map);
+        });
     });
   </script>
 </body>
