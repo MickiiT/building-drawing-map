@@ -24,7 +24,7 @@
     var map = L.map('map').setView([37.7749, -122.4194], 12); // Initial view (change coordinates)
 
     // Add a base map (can use OpenStreetMap, ESRI, Mapbox, etc.)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    L.tileLayer('https://tiles-cdn.koordinates.com/services;key=d3971a9d0ad84133820767ba0525623c/tiles/v4/layer=120423/EPSG:3857/{z}/{x}/{y}.png').addTo(map);
 
     // Optionally, add LiDAR elevation data (if available in XYZ/WMS format)
     L.tileLayer('https://tiles-cdn.koordinates.com/services;key=d3971a9d0ad84133820767ba0525623c/tiles/v4/layer=121859/EPSG:3857/{z}/{x}/{y}.png').addTo(map); // replace with your LiDAR URL
