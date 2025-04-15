@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Building Drawing Map</title>
+  <title>LiDAR Data with Classification</title>
   <!-- Include Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
   <style>
@@ -20,35 +20,35 @@
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 
   <script>
-    // Create the map
-    var map = L.map('map').setView([37.7749, -122.4194], 12); // Initial view (change coordinates)
+    // Create the map centered on New Zealand (NZ)
+    var map = L.map('map').setView([-40.9006, 174.8860], 6); // Coordinates for New Zealand
 
-    // Add a base map (can use OpenStreetMap, ESRI, Mapbox, etc.)
-    L.tileLayer('https://tiles-cdn.koordinates.com/services;key=d3971a9d0ad84133820767ba0525623c/tiles/v4/layer=120423/EPSG:3857/{z}/{x}/{y}.png').addTo(map);
+    // Add a base map (OpenStreetMap)
+    L.tileLayer('https://basemaps.linz.govt.nz/v1/tiles/aerial/WebMercatorQuad/{z}/{x}/{y}.webp?api=c01jrxpkjkxwdtsqct5y6dnwkca').addTo(map);
 
-    // Optionally, add LiDAR elevation data (if available in XYZ/WMS format)
-    L.tileLayer('https://tiles-cdn.koordinates.com/services;key=d3971a9d0ad84133820767ba0525623c/tiles/v4/layer=121859/EPSG:3857/{z}/{x}/{y}.png').addTo(map); // replace with your LiDAR URL
+    // Add LiDAR tile layer from the provided JSON API URL
+    var lidarTileLayer = L.tileLayer('https://data.linz.govt.nz/services/query/v1/raster.json?key=d3971a9d0ad84133820767ba0525623c&layer=121859&x={x}&y={y}', {
+      attribution: 'LiDAR Data &copy; LINZ',
+      tileSize: 256,
+      maxZoom: 18,
+      minZoom: 6,
+      bounds: [[-47.0, 166.0], [-34.0, 179.0]], // New Zealand bounds
+    }).addTo(map);
 
-    // Example of adding a GeoJSON layer for house drawings
-    // Replace the content with your own GeoJSON data or load it dynamically
-    var geojsonData = {
-      "type": "FeatureCollection",
-      "features": [{
-        "type": "Feature",
-        "geometry": {
-          "type": "Polygon",
-          "coordinates": [
-            [[-122.4210, 37.7750], [-122.4215, 37.7750], [-122.4215, 37.7745], [-122.4210, 37.7745], [-122.4210, 37.7750]]
-          ]
-        },
-        "properties": {
-          "name": "Future Building"
-        }
-      }]
-    };
+    // Optional: Add click functionality to view classification values (if classification data exists)
+    // Assuming your LiDAR JSON API provides classification info in the response.
+    map.on('click', function(e) {
+      var lat = e.latlng.lat;
+      var lng = e.latlng.lng;
 
-    // Add the house drawing (GeoJSON layer)
-    L.geoJSON(geojsonData).addTo(map);
+      // Simulate a query or popup display - this can be customized to fetch actual classification data
+      var message = 'Clicked at Lat: ' + lat.toFixed(4) + ', Lng: ' + lng.toFixed(4);
+      // Example of showing a message with classification if possible
+      var popup = L.popup()
+        .setLatLng(e.latlng)
+        .setContent(message) // You can replace this with the actual classification query
+        .openOn(map);
+    });
   </script>
 </body>
 </html>
