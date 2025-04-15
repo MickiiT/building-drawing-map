@@ -1,34 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Canterbury LiDAR DRA Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Canterbury LiDAR Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
   <style>
-    #map {
-      height: 100vh;
+    html, body, #map {
+      height: 100%;
+      margin: 0;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
-  <!-- Leaflet, GeoTIFF, Plotty -->
+  <!-- Leaflet -->
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/geotiff"></script>
-  <script src="https://unpkg.com/plotty"></script>
+  <!-- proj4 for NZTM conversion -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+  <!-- geotiff.js for reading elevation files -->
+  <script src="https://unpkg.com/geotiff@1.0.0-beta.10/dist/geotiff.browser.min.js"></script>
+  <!-- plotty for color scaling -->
+  <script src="https://unpkg.com/plotty/build/plotty.min.js"></script>
 
   <script>
-    var map = L.map('map').setView([-43.5321, 172.6362], 12); // Christchurch
+    const map = L.map('map').setView([-43.5321, 172.6362], 12); // Christchurch
 
+    // Basemap
     L.tileLayer('https://basemaps.linz.govt.nz/v1/tiles/aerial/WebMercatorQuad/{z}/{x}/{y}.webp?api=c01jrxpkjkxwdtsqct5y6dnwkca', {
       attribution: 'Imagery: LINZ',
       maxZoom: 20
     }).addTo(map);
 
-    // Define projection WGS84 to NZTM2000
+    // NZTM projection
     proj4.defs("EPSG:2193", "+proj=tmerc +lat_0=0 +lon_0=173 +k=0.9996 +x_0=1600000 +y_0=10000000 +ellps=GRS80 +units=m +no_defs");
 
     function convertLatLngToNZTM(lat, lng) {
@@ -37,59 +42,121 @@
 
     function getCogUrlForNZTM(nztmCoords) {
       const [x, y] = nztmCoords;
-
-      // Snap to nearest 1000m tile origin (these are 1km x 1km tiles)
       const xTile = Math.floor(x / 1000) * 1000;
       const yTile = Math.floor(y / 1000) * 1000;
 
-      // Construct the AWS URL for the Canterbury DEM tile
+      // Canterbury bounds check
+      if (xTile < 1470000 || xTile > 1560000 || yTile < 5100000 || yTile > 5240000) {
+        return null;
+      }
+
       return `https://nz-elevation.s3.amazonaws.com/CANTERBURY/DSM/2020-2021/1m/Tile_${xTile}_${yTile}.tif`;
     }
 
-    var ElevationLayer = L.GridLayer.extend({
+    const ElevationLayer = L.GridLayer.extend({
       createTile: function(coords, done) {
-        var tile = document.createElement('canvas');
+        const tile = document.createElement('canvas');
         tile.width = 256;
         tile.height = 256;
 
-        var bounds = this._tileCoordsToBounds(coords);
-        var center = bounds.getCenter();
+        const bounds = this._tileCoordsToBounds(coords);
+        const center = bounds.getCenter();
+        const nztm = convertLatLngToNZTM(center.lat, center.lng);
+        const cogUrl = getCogUrlForNZTM(nztm);
 
-        var nztmCenter = convertLatLngToNZTM(center.lat, center.lng);
-        var cogUrl = getCogUrlForNZTM(nztmCenter);
+        if (!cogUrl) {
+          done(null, tile);
+          return tile;
+        }
 
         fetch(cogUrl)
-          .then(res => res.arrayBuffer())
+          .then(res => res.ok ? res.arrayBuffer() : Promise.reject("Not Found"))
           .then(GeoTIFF.fromArrayBuffer)
           .then(tiff => tiff.getImage())
-          .then(image => image.readRasters({ interleave: true }))
-          .then(raster => {
-            var min = Math.min(...raster);
-            var max = Math.max(...raster);
+          .then(image => {
+            return image.readRasters({ interleave: true }).then(raster => ({
+              image,
+              raster
+            }));
+          })
+          .then(({ image, raster }) => {
+            const width = image.getWidth();
+            const height = image.getHeight();
+            const resized = new Float32Array(256 * 256);
 
-            var plot = new plotty.plot({
+            for (let y = 0; y < 256; y++) {
+              for (let x = 0; x < 256; x++) {
+                const srcX = Math.floor(x * width / 256);
+                const srcY = Math.floor(y * height / 256);
+                resized[y * 256 + x] = raster[srcY * width + srcX];
+              }
+            }
+
+            const min = Math.min(...resized);
+            const max = Math.max(...resized);
+
+            const plot = new plotty.plot({
               canvas: tile,
-              data: raster,
-              width: image.getWidth(),
-              height: image.getHeight(),
+              data: resized,
+              width: 256,
+              height: 256,
               domain: [min, max],
-              colorScale: "viridis",
+              colorScale: 'viridis',
               noDataValue: -9999
             });
+
             plot.render();
             done(null, tile);
           })
           .catch(err => {
-            console.error("Tile error:", err);
-            done(err, tile);
+            console.warn('Tile load failed:', err);
+            done(null, tile);
           });
 
         return tile;
       }
     });
 
-    const elevationLayer = new ElevationLayer();
-    map.addLayer(elevationLayer);
+    map.addLayer(new ElevationLayer());
+
+    map.on('click', function(e) {
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      const nztm = convertLatLngToNZTM(lat, lng);
+      const url = getCogUrlForNZTM(nztm);
+
+      if (!url) {
+        L.popup().setLatLng(e.latlng).setContent('Out of bounds').openOn(map);
+        return;
+      }
+
+      fetch(url)
+        .then(res => res.arrayBuffer())
+        .then(GeoTIFF.fromArrayBuffer)
+        .then(tiff => tiff.getImage())
+        .then(image => {
+          const bbox = image.getBoundingBox(); // [minX, minY, maxX, maxY]
+          const width = image.getWidth();
+          const height = image.getHeight();
+
+          const xRes = (bbox[2] - bbox[0]) / width;
+          const yRes = (bbox[3] - bbox[1]) / height;
+
+          const xPixel = Math.floor((nztm[0] - bbox[0]) / xRes);
+          const yPixel = Math.floor((bbox[3] - nztm[1]) / yRes); // invert y axis
+
+          return image.readRasters({ window: [xPixel, yPixel, xPixel + 1, yPixel + 1] });
+        })
+        .then(raster => {
+          const elev = raster[0][0];
+          const msg = (elev === -9999) ? 'No data' : `Elevation: ${elev.toFixed(2)} m`;
+          L.popup().setLatLng(e.latlng).setContent(msg).openOn(map);
+        })
+        .catch(err => {
+          console.error('Popup error:', err);
+          L.popup().setLatLng(e.latlng).setContent('Error retrieving elevation').openOn(map);
+        });
+    });
   </script>
 </body>
 </html>
